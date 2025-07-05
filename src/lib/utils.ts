@@ -6,7 +6,7 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 // API Configuration
-export const API_BASE_URL = 'https://swrzee.in/api';
+export const API_BASE_URL = '/api';
 
 // Types for API responses
 export interface LoginResponse {
