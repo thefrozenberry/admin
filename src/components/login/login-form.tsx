@@ -315,45 +315,69 @@ function SuperAdminCreationModal({ onClose }: { onClose: () => void }) {
 }
 
 export function LoginForm() {
+  const router = useRouter();
+  const [isLoading, setIsLoading] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [rememberMe, setRememberMe] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [showSuperAdminModal, setShowSuperAdminModal] = useState(false);
+  const [createSuperAdmin, setCreateSuperAdmin] = useState(false);
   const [showAdminModal, setShowAdminModal] = useState(false);
-  const router = useRouter();
+  const [showSuperAdminModal, setShowSuperAdminModal] = useState(false);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    
+    if (createSuperAdmin) {
+      setShowSuperAdminModal(true);
+      return;
+    }
+
     setIsLoading(true);
-    setError(null);
+    setLoginError(null);
+    
+    // Validate email
+    if (!email || !email.includes('@')) {
+      setLoginError("Please enter a valid email address.");
+      setIsLoading(false);
+      return;
+    }
+    
+    // Validate password
+    if (!password || password.length < 8) {
+      setLoginError("Password must be at least 8 characters.");
+      setIsLoading(false);
+      return;
+    }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
-        method: "POST",
+      const response = await fetch(`${API_BASE_URL}/auth/login-with-password`, {
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({
+          email,
+          password,
+        }),
       });
 
-      const data = await response.json();
+      const data: LoginResponse = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || "Login failed");
+        throw new Error(data.message || 'Login failed');
       }
 
-      // Store the tokens
-      storeAuthData(data);
+      // Store auth data
+      storeAuthData(data.data);
 
-      // Set the access token in cookies
-      document.cookie = `accessToken=${data.tokens.accessToken}; path=/; max-age=${60 * 60 * 24 * 7}`; // 7 days expiry
-
-      // Redirect to dashboard
-      router.push("/dashboard");
+      // Handle role-based routing
+      if (data.data.user.role === 'superadmin') {
+        setShowAdminModal(true);
+      } else {
+        router.push('/dashboard');
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
+      setLoginError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setIsLoading(false);
     }
@@ -362,68 +386,72 @@ export function LoginForm() {
   return (
     <>
       <form onSubmit={onSubmit} className="space-y-6">
-        {error && !showSuperAdminModal && (
+        {loginError && !createSuperAdmin && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md flex items-center text-sm mb-4">
             <FiAlertCircle className="mr-2 h-4 w-4" />
-            {error}
+            {loginError}
           </div>
         )}
         
         <div className="flex items-center space-x-2 mb-6">
           <Checkbox 
-            id="rememberMe" 
-            checked={rememberMe}
+            id="createSuperAdmin" 
+            checked={createSuperAdmin}
             onCheckedChange={(checked) => {
-              setRememberMe(checked === true);
-              setError(null);
+              setCreateSuperAdmin(checked === true);
+              setLoginError(null);
             }}
           />
           <Label
-            htmlFor="rememberMe"
+            htmlFor="createSuperAdmin"
             className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-gray-700"
           >
-            Remember me
+            Create Super Admin
           </Label>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="email">Email</Label>
-          <div className="relative">
-            <FiMail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-            <Input 
-              id="email"
-              type="email"
-              placeholder="corporate@example.com" 
-              className="pl-10" 
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required={!showSuperAdminModal}
-            />
-          </div>
-        </div>
-        
-        <div className="space-y-2">
-          <Label htmlFor="password">Password</Label>
-          <div className="relative">
-            <FiLock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-            <Input 
-              id="password"
-              type="password" 
-              placeholder="••••••••" 
-              className="pl-10" 
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required={!showSuperAdminModal}
-            />
-          </div>
-        </div>
+        {!createSuperAdmin && (
+          <>
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <div className="relative">
+                <FiMail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Input 
+                  id="email"
+                  type="email"
+                  placeholder="corporate@example.com" 
+                  className="pl-10" 
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required={!createSuperAdmin}
+                />
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <div className="relative">
+                <FiLock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Input 
+                  id="password"
+                  type="password" 
+                  placeholder="••••••••" 
+                  className="pl-10" 
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required={!createSuperAdmin}
+                />
+              </div>
+            </div>
+          </>
+        )}
         
         <Button 
           type="submit" 
           className="w-full" 
           disabled={isLoading}
         >
-          {showSuperAdminModal ? "One Time Setup" : (isLoading ? "Signing in..." : "Sign in")}
+          {createSuperAdmin ? "One Time Setup" : (isLoading ? "Signing in..." : "Sign in")}
         </Button>
       </form>
 
@@ -437,6 +465,7 @@ export function LoginForm() {
       {showSuperAdminModal && (
         <SuperAdminCreationModal onClose={() => {
           setShowSuperAdminModal(false);
+          setCreateSuperAdmin(false);
           router.push('/');
         }} />
       )}

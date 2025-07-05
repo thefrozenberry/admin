@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import Image from "next/image"
+import { useRouter, useSearchParams } from "next/navigation"
 import {
   Search,
   Bell,
@@ -48,9 +49,23 @@ type DashboardData = {
 }
 
 export default function Dashboard() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [activeView, setActiveView] = useState<ActiveView>("overview")
+  const [activeView, setActiveView] = useState<ActiveView>(() => {
+    const tab = searchParams.get("tab")
+    return (tab as ActiveView) || "overview"
+  })
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null)
+
+  // Check for auth token and redirect if not found
+  useEffect(() => {
+    const { tokens } = getStoredAuthData();
+    if (!tokens?.accessToken) {
+      router.replace('/')
+      return
+    }
+  }, [router])
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -60,6 +75,7 @@ export default function Dashboard() {
         
         if (!tokens?.accessToken) {
           console.error('No access token found')
+          router.replace('/')
           return
         }
 
@@ -94,6 +110,18 @@ export default function Dashboard() {
     }
 
     fetchDashboardData()
+  }, [router])
+
+  // Listen for popstate (back/forward) events
+  useEffect(() => {
+    const handlePopState = () => {
+      // When going back/forward, update the active view based on URL
+      const tab = new URLSearchParams(window.location.search).get("tab")
+      setActiveView((tab as ActiveView) || "overview")
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
   }, [])
 
   const navItems = [
@@ -102,6 +130,13 @@ export default function Dashboard() {
     { name: "Services", icon: BookOpen, view: "services" as ActiveView },
     { name: "Batches", icon: GraduationCap, view: "batches" as ActiveView },
   ]
+
+  const handleTabChange = (view: ActiveView) => {
+    setActiveView(view)
+    // Use replaceState instead of push to avoid creating history entries
+    const url = view === "overview" ? "/dashboard" : `/dashboard?tab=${view}`
+    window.history.replaceState({}, "", url)
+  }
 
   const renderActiveView = () => {
     switch (activeView) {
@@ -116,6 +151,11 @@ export default function Dashboard() {
       default:
         return <div>Coming Soon</div>
     }
+  }
+
+  // Return null while checking authentication to prevent flash of content
+  if (!getStoredAuthData()?.tokens?.accessToken) {
+    return null
   }
 
   return (
@@ -144,7 +184,7 @@ export default function Dashboard() {
           {navItems.map((item) => (
             <div
               key={item.name}
-              onClick={() => setActiveView(item.view)}
+              onClick={() => handleTabChange(item.view)}
               className={`flex items-center space-x-3 px-3 py-3 rounded-lg cursor-pointer transition-all duration-200 ${
                 activeView === item.view
                   ? "bg-blue-50 text-blue-700 border-r-2 border-blue-600"
